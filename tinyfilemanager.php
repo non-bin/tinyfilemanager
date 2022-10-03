@@ -68,6 +68,10 @@ $root_url = '';
 // Server hostname. Can set manually if wrong
 $http_host = $_SERVER['HTTP_HOST'];
 
+// Number of seconds to run before we start skipping expensive opterations
+// like folder size calculations. 0 stops these functions running alltogether
+$timeout = 3;
+
 // user specific directories
 // array('Username' => 'Directory path', 'Username2' => 'Directory path', ...)
 $directories_users = array();
@@ -141,6 +145,8 @@ if (is_readable($config_file)) {
 }
 
 // --- EDIT BELOW CAREFULLY OR DO NOT EDIT AT ALL ---
+
+define('START_TIME', microtime(true));
 
 // max upload file size
 define('MAX_UPLOAD_SIZE', $max_upload_size_bytes);
@@ -2552,6 +2558,7 @@ function fm_get_size($file)
  */
 function fm_get_filesize($size)
 {
+    if ($size == -1) return lng('Skipped');
     $size = (float) $size;
     $units = array('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB');
     $power = ($size > 0) ? floor(log($size, 1024)) : 0;
@@ -2566,10 +2573,19 @@ function fm_get_filesize($size)
  * @return int Total number of bytes.
  */
 function fm_get_directorysize($directory) {
+    global $timeout;
+
+    if ($timeout == 0) return -1;
+
     $bytes = 0;
     $directory = realpath($directory);
     if ($directory !== false && $directory != '' && file_exists($directory)){
         foreach(new RecursiveIteratorIterator(new RecursiveDirectoryIterator($directory, FilesystemIterator::SKIP_DOTS)) as $file){
+            if ((microtime(true) - START_TIME) > $timeout) {
+                $timeout = 0;
+                return -1;
+            }
+
             $bytes += $file->getSize();
         }
     }
@@ -4131,7 +4147,8 @@ function lng($txt) {
     $tr['en']['Operations with archives are not available']     = 'Operations with archives are not available';
     $tr['en']['File or folder with this path already exists']   = 'File or folder with this path already exists';
 
-    $tr['en']['Moved from']                 = 'Moved from';
+    $tr['en']['Moved from']         = 'Moved from';
+    $tr['en']['Skipped']            = 'Skipped';
 
     $i18n = fm_get_translations($tr);
     $tr = $i18n ? $i18n : $tr;
